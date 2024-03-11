@@ -1,4 +1,4 @@
-# Interactive Multimodel Explorer
+# Interactive Multimodel Explorer (IME)
 [Demo using this codeset](https://weather-models.info/research/IME/) | [Realtime version using codes modified from this repository](https://weather-models.info/latest/medium_multimodel/multimap/global.html)
 
 
@@ -31,3 +31,15 @@ First, copy all codes to your web server or your laptop.
 ```
 git clone https://github.com/kazuya-yamazaki/Interactive-Multimodel-Explorer.git
 ```
+
+### Compile WebAssmebly codes
+Enable your Emscripten installation and execute `src/wasm/compile.sh`. Two files should be created: `grid_analyses.wasm` and `grid_analyses.js`. Copy these files to `src/web/`.
+
+### Modify server-side Python scripts and download source NWP data
+`src/convertion/gfs.py` presents the overview of server-side data conversion process. Create your own version to adapt to the model and variable of your interest. Download original NWP data if neccesary and reflect the download directory to your conversion script.
+
+### Convert NWP data and copy client-side files
+Run your conversion script. Copy the `bundled_nwp_data` directory and contents in `src/web/` to the directory where you wish to host the the IME.
+
+### Modify client-side scirpts
+Data directory, initial dates, and model names may not be suitable for your IME. Modify them as necessary.
