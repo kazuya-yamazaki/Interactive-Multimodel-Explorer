@@ -54,8 +54,8 @@ Data directory, initial dates, and model names may not be suitable for your IME.
 
 ## Data and softwares used in this project
 
-* Coastlines: [http://cola.gmu.edu/grads/gadoc/basemap.html](GrADS lowres data)
-* Political borders: [https://www.soest.hawaii.edu/pwessel/gshhg/](GSHHG)
-* UI management: [https://jquery.com/](jQuery), [https://jqueryui.com/](jQuery UI), [https://github.com/furf/jquery-ui-touch-punch](jQuery UI Touch Punch)
-* Date formatting: [https://cyokodog.hatenadiary.org/entry/20090316/jQueryExDate](jQuery.exDate.js by Cyokodog)
+* Coastlines: [GrADS lowres data](http://cola.gmu.edu/grads/gadoc/basemap.html)
+* Political borders: [GSHHG](https://www.soest.hawaii.edu/pwessel/gshhg/)
+* UI management: [jQuery](https://jquery.com/), [jQuery UI](https://jqueryui.com/), [jQuery UI Touch Punch](https://github.com/furf/jquery-ui-touch-punch)
+* Date formatting: [jQuery.exDate.js by Cyokodog](https://cyokodog.hatenadiary.org/entry/20090316/jQueryExDate)
 * Human-friendly HSL color space: [https://github.com/hsluv/hsluv-javascript](https://github.com/hsluv/hsluv-javascript)
