@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<script src="https://unpkg.com/jquery@3.3.1/dist/jquery.min.js"></script>
+<script src="https://www.unpkg.com/jquery-ui@1.13.2/dist/jquery-ui.min.js"></script>
+<link rel="stylesheet" href="https://www.unpkg.com/jquery-ui@1.13.2/dist/themes/base/jquery-ui.min.css"/>
+<script src="https://unpkg.com/jquery-ui-touch-punch@0.2.3/jquery.ui.touch-punch.min.js"></script>
+<script src="dependencies/exdate.js"></script>
+<script src="dependencies/hsluv-1.0.1.min.js"></script>
+<script src="var_info.js"></script>
+<script src="render_webgl.js"></script>
+<script src="renderer.js"></script>
+<script src="ui.js"></script>
+<script src="grid.js"></script>
+<script src="projection.js"></script>
+<script src="chart.js"></script>
+<script src="misc.js"></script>
+<title>Interactive Multimodel Explorer</title>
+<style>
+body {
+	background-color: #f0f0f0;
+	margin: 0px;
+}
+select {
+	margin-right: 1em;
+	margin-left: 0.1em;
+}
+.timebtn {
+	display: inline-block;
+	background-color: white;
+	border: 1px solid white;
+}
+.timebtn_inc {
+	display: inline-block;
+	background-color: white;
+	border: 1px solid white;
+}
+.timebtn_sel {
+	background-color: #ffff80;
+	border: 1px solid black;
+}
+.timebtn_loading {
+	background-color: #c0c0c0;
+}
+.timebar_row {
+	border: 1px solid black;
+	display: inline-block;
+}
+.inblock {
+	display: inline-block;
+}
+.range{
+	width: 12em;
+	display: inline-block;
+	margin-right: 1em;
+}
+.cmap_monotone {
+	background: linear-gradient(to right, #5f52a7, #6b95aa, #91d2ca, #9df0ae, #f3f9ac);
+}
+.cmap_monotone2 {
+	background: linear-gradient(to right, white, #95c89c, #5e9b94, #7e47d6, #8b123c);
+}
+.cmap_bwr {
+	background: linear-gradient(to right, #4f65b9, white, #cd4a4b);
+}
+.cmap_rainbow {
+	background: linear-gradient(to right, #a400b6, #00abca, #00f1a4, #cbb000, #ff4d81);
+}
+</style>
+<script>
+
+let renderer, grid, chart, ui, projection;
+let processing = false;
+
+function init(){
+	projection = new Projection();
+	chart = new Chart();
+	grid = new Grid();
+	ui = new UI();
+	import("./grid_analyses.js")
+		.then(mod => mod.default())
+		.then(mod => {
+			Promise.all([grid.prepare_data(ui.varname_shade,true, true), grid.prepare_data(ui.varname_ctr,true, false), fetch_json("coast_global.json", true)]).then(results => {
+				renderer = new Renderer(mod, results[2]);
+				ui.on_region();
+			})
+		});
+}
+
+</script>
+</head>
+<body onload="init()">
+<div>
+	<h1 style="text-align: center;">Interactive Multimodel Explorer - demo version</h1>
+	<ul>
+		<li>Zoom in/out: Ctrl + mouse wheel</li>
+		<li>Pan: Mouse drag</li>
+		<li>Multi-touch panning and zooming are supported on mobile devices.</li>
+	</ul>
+</div>
+<div style="text-align: center; margin-bottom: 5px;">
+	<select id="initial_ymdh" style="display: none;">
+		<option value="2024021400">2024-02-14 00Z</option>
+	</select>
+	<button onclick="$('#region').val('pacific'); ui.on_region();">Move to the Pacific</button>
+	<button onclick="$('#region').val('conus'); ui.on_region();">Move to CONUS</button>
+	<button onclick="$('#region').val('ne-us'); ui.on_region();">Move to Northeastern US</button>
+	<select id="region" style="display: none;">
+		<option value="pacific">Pacific</option>
+		<option value="conus">CONUS</option>
+		<option value="ne-us">Northeastern US</option>
+		<option value="custom">Customized region</option>
+	</select>
+	<select id="projection" onchange="ui.on_projection(true)">
+		<option value="ortho">Orthogonal projection</option>
+		<option value="latlon">Lat-lon coordinate</option>
+	</select>
+</div>
+<div style="text-align: center; margin-bottom: 5px;">
+	<span style="display: inline-block;">
+		Smoothing:<select id="smoothing" onchange="ui.change_ft(ui.ft)">
+			<option value="default">Default</option>
+			<option value="5x5">5x5</option>
+			<option value="3x3">3x3</option>
+			<option value="none">No smoothing</option>
+		</select>
+	</span>
+	<span style="display: inline-block;">
+		Rendering resolution:<select id="resolution" onchange="chart.set_size(false)">
+			<option value="1.5">1.5x</option>
+			<option value="1.2">1.2x</option>
+			<option value="1" selected="selected">1.0x</option>
+			<option value="0.8">0.8x</option>
+			<option value="0.6">0.6x</option>
+		</select>
+	</span>
+	<span style="display: inline-block; margin-top: 0.5em">
+		Contours / Streamlines:<select id="varname_ctr" onchange="ui.change_var()">
+			<option value="precip6">6h precipitation</option>
+			<option value="accprecip">Accum. precipitation</option>
+			<option value="slp" selected="selected">Sea-level pressure</option>
+			<option value="z500">Z500</option>
+			<option value="t850">T850</option>
+			<option value="wspd10">Surface wind speed</option>
+			<option value="wdir10">Surface streamlines</option>
+			<option value="none">None</option>
+		</select>
+	</span>
+	<span style="display: inline-block; margin-top: 0.5em">
+		Shading:<select id="varname_shade" onchange="ui.change_var()">
+			<option value="precip6">6h precipitation</option>
+			<option value="accprecip">Accum. precipitation</option>
+			<option value="slp">Sea-level pressure</option>
+			<option value="z500">Z500</option>
+			<option value="t850">T850</option>
+			<option value="wspd10">Surface wind speed</option>
+			<option value="none">None</option>
+		</select>
+		<span id="shade_prefs_t850" class="shade_prefs">
+			Palette:
+			<select id="cmap_t850" onchange="ui.update_cmap('t850')">
+				<option value="monotone">Standard</option>
+				<option value="bwr">Blue-white-red</option>
+				<option value="rainbow">Rainbow</option>
+			</select>
+			<span id="vrange_t850" class="range"></span>
+			<span id="vrange_t850_indicator"></span>
+		</span>
+		<span id="shade_prefs_z500" class="shade_prefs">
+			Palette:
+			<select id="cmap_z500" onchange="ui.update_cmap('z500')">
+				<option value="monotone">Standard</option>
+				<option value="bwr">Blue-white-red</option>
+				<option value="rainbow">Rainbow</option>
+			</select>
+			<span id="vrange_z500" class="range"></span>
+			<span id="vrange_z500_indicator"></span>
+		</span>
+		<span id="shade_prefs_slp" class="shade_prefs">
+			Palette:
+			<select id="cmap_slp" onchange="ui.update_cmap('slp')">
+				<option value="monotone">Standard</option>
+				<option value="bwr">Blue-white-red</option>
+			</select>
+			<span id="vrange_slp" class="range"></span>
+			<span id="vrange_slp_indicator"></span>
+		</span>
+		<span id="shade_prefs_wspd10" class="shade_prefs">
+			Palette:
+			<select id="cmap_wspd10" onchange="ui.update_cmap('wspd10')">
+				<option value="monotone2">Standard</option>
+			</select>
+			<span id="vrange_wspd10" class="range"></span>
+			<span id="vrange_wspd10_indicator"></span>
+		</span>
+		<span id="shade_prefs_wspd850" class="shade_prefs">
+			Palette:
+			<select id="cmap_wspd850" onchange="ui.update_cmap('wspd850')">
+				<option value="monotone2">Standard</option>
+			</select>
+			<span id="vrange_wspd850" class="range"></span>
+			<span id="vrange_wspd850_indicator"></span>
+		</span>
+		<span id="shade_prefs_precip6" class="shade_prefs">
+			Palette:
+			<select id="cmap_precip6" onchange="ui.update_cmap('precip6')">
+				<option value="monotone2">Standard</option>
+			</select>
+			<span id="vrange_precip6" class="range"></span>
+			<span id="vrange_precip6_indicator"></span>
+		</span>
+		<span id="shade_prefs_accprecip" class="shade_prefs">
+			Palette:
+			<select id="cmap_accprecip" onchange="ui.update_cmap('accprecip')">
+				<option value="monotone2">Standard</option>
+			</select>
+			<span id="vrange_accprecip" class="range"></span>
+			<span id="vrange_accprecip_indicator"></span>
+		</span>
+	</span>
+</div>
+<div style="width: calc(100vw - (100vw - 100%)); text-align: center; margin-top:1em">
+	<span>Forecast Time (hour)</span>
+	<div style="user-select: none">
+		<span id="timebar0"></span>
+		<span id="timebar1"></span>
+		<span id="timebar2"></span>
+		<span id="timebar3"></span>
+		<span id="timebar4"></span><br>
+		<span class="timebar_row" style="margin: 5px 0;">
+			<span class="timebtn_inc" onclick="ui.inc_ft(-24)">-24h</span>
+			<span class="timebtn_inc" onclick="ui.inc_ft(-6)">-6h</span>
+			<span class="timebtn_inc" onclick="ui.inc_ft(6)">+6h</span>
+			<span class="timebtn_inc" onclick="ui.inc_ft(24)">+24h</span>
+		</span>
+	</div>
+
+	<div id="canvas_container" style="position: relative; margin-left: auto; margin-right: auto;">
+		<canvas id="canvas" style="position: absolute; left:0; top:0;"></canvas>
+		<canvas id="canvas_webgl" style="position: absolute; pointer-events: none; left:0; top:0;"></canvas>
+	</div>
+</div>
+<div style="text-align: center;">
+	<button id="measure_perf" onclick="measure_perf()">Render 10 times & calc. average time</button>
+	<span id="info"></span>
+</div>
+<div style="margin-left: 20px;">
+	<h3>Data and softwares used in this website</h3>
+	<ul>
+		<li>Deterministic forecast data by Canada, ECMWF, and Germany: <a href="https://apps.ecmwf.int/datasets/data/tigge/">TIGGE Data portal hosted by ECMWF</a></li>
+		<li>Deterministic forecast data by USA: <a href="https://registry.opendata.aws/noaa-gfs-bdp-pds/">Open Data on AWS</a></li>
+		<li>Deterministic forecast data by Japan: <a href="http://database.rish.kyoto-u.ac.jp/index-e.html">Research Institute for Sustainable Humanosphere, Kyoto University</a></li>
+		<li>Coastlines: <a href="http://cola.gmu.edu/grads/gadoc/basemap.html">GrADS lowres data</a></li>
+		<li>Political borders: <a href="https://www.soest.hawaii.edu/pwessel/gshhg/">GSHHG</a></li>
+		<li>UI management: <a href="https://jquery.com/">jQuery</a>, <a href="https://jqueryui.com/">jQuery UI</a>, <a href="https://github.com/furf/jquery-ui-touch-punch">jQuery UI Touch Punch</a></li>
+		<li>Date formatting: <a href="https://cyokodog.hatenadiary.org/entry/20090316/jQueryExDate">jQuery.exDate.js by Cyokodog</a></li>
+		<li>Human-friendly HSL color space: <a href="https://github.com/hsluv/hsluv-javascript">https://github.com/hsluv/hsluv-javascript</a></li>
+	</ul>
+</div>
+</body>
+</html>
+
+

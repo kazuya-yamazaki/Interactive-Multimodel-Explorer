@@ -1,0 +1,18 @@
+# If you use Apache, rename this file to .htaccess to set up server configurations.
+
+AddType application/wasm .wasm
+
+RewriteEngine on
+RewriteCond %{REQUEST_URI} \.(bin|json)$
+RewriteCond %{REQUEST_FILENAME}\.gz -s
+RewriteRule .* %{REQUEST_URI}.gz [L]
+ 
+<FilesMatch "\.bin\.gz$">
+ForceType application/octet-stream
+AddEncoding x-gzip .gz
+</FilesMatch>
+ 
+<FilesMatch "\.json\.gz$">
+ForceType application/json
+AddEncoding x-gzip .gz
+</FilesMatch>
