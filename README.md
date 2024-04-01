@@ -42,7 +42,9 @@ Enable your Emscripten installation and execute `src/wasm/compile.sh`. Two files
 
 ### Modify server-side Python scripts and download source NWP data
 
-`src/convertion/gfs.py` presents the overview of server-side data conversion process. Create your own version to adapt to the model and variable of your interest. Download NWP data and reflect the file path to your conversion script.
+`src/convertion/lhpos.f90` contains Fortran codes invoked from Python scripts to locate lows and highs. Activate your Python environment and compile it: `f2py -m lhpos -c --f90flags='-O2' lhpos.f90`
+
+`src/convertion/convert.py` is a sample script for the server-side data conversion. Create your own version to adapt to the models and variables of your interest. Download NWP data and reflect the file path to your conversion script.
 
 ### Convert NWP data and copy client-side files
 
