@@ -4,7 +4,7 @@
 
 A web application to interactively visualize products of numerical weather prediction (NWP). Rich contents can be hosted on minimal-spec servers because all components are rendered on browsers.
 
-This project is published under the GPL-3.0 license. If you wish to use codes in this repository in your proprietary project, please reach out to ??? (at) cc.u-tokyo.ac.jp to request another type of license.
+This project is published under the GPL-3.0 license.
 
 ## Overview and requirements of the system
 
