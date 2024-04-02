@@ -6,16 +6,18 @@ import pygrib
 from datetime import datetime, timedelta
 
 #
+# See the bottom of this script for the overview of conversion processes.
 # This script assumes that there are five NWP files (us.grb2, ca.grb2, ec.grb2, kr.grb2, jp.grb2) initialized at 2024-02-14 00:00Z
 # and reanalysis files (era5.grib, era5_precip.grib) which cover ten days from 2024-02-14 00:00Z.
-# Time step is assumed to be six hours except for era5_precip.grib (hourly precipitation). 
-# Intermediate files will be created in centers/ and the final product will be in bundled_nwp_data/
+# Time step is assumed to be six hours except for era5_precip.grib (hourly precipitation).
+# All fields are assumed to be in the regular lat-lon 0.5-degree grid.
+# Intermediate single-model files will be created in centers/ and the final multimodel product will be in bundled_nwp_data/
 # Create your own script based on this sample to suit your needs.
 #
 
 
 
-##### Global variables #####
+######## Constants and Helper functions ########
 
 padding = b"\x00"
 
@@ -25,22 +27,9 @@ normalize = {
 	"precip6": lambda x: digitize_nan(x, [0.1, 0.5, 1, 2, 3, 5, 7.5, 10, 15, 20, 30, 50, 75, 100]),
 	"accprecip": lambda x: digitize_nan(x, [1, 2, 4, 6, 8, 12, 16, 24, 32, 40, 48, 64, 96, 128, 256, 512]),
 	"z500": lambda x: np.floor((x-3000)/20),
-	"wdir10": lambda x: np.floor(x*16),
-	"wdir850": lambda x: np.floor(x*16),
+	"wdir10": lambda x: np.floor((x/np.pi % 2) * 16),
 	"wspd10": lambda x: np.floor(x/10),
-	"wspd850": lambda x: np.floor(x/10),
 }
-
-varnames = ["slp","t850","precip6","accprecip","z500","wdir10","wspd10"]
-
-lonmin = 0
-lonmax = 359.5
-latmin = -90
-latmax = 90
-
-initial_ymdh = [2024, 2, 14, 0]
-
-############################
 
 def crop_var(ary, indices):
 	return np.concatenate((
@@ -67,7 +56,7 @@ def select_var(grbs, indices, **filters):
 		print(results)
 		return crop_var(results[0].values, indices)
 
-def extract_grid(grb):
+def extract_grid_info(grb):
 	lon0 = grb.longitudeOfFirstGridPointInDegrees
 	lat0 = grb.latitudeOfFirstGridPointInDegrees
 	lat1 = grb.latitudeOfLastGridPointInDegrees
@@ -115,7 +104,7 @@ def process_lhpos(ary, l):
 				break
 	return np.asarray(nlowhigh, dtype=np.uint32).tobytes() + result_lh
 
-def export_bin(model_id, grid, ft, ary_orig, varname, result_lh=np.asarray([0,0], dtype=np.uint32).tobytes()):
+def export_singlemodel_binary(model_id, grid, ft, ary_orig, varname, result_lh=np.asarray([0,0], dtype=np.uint32).tobytes()):
 	ary = normalize[varname](ary_orig)
 	ny, nx = ary.shape
 	
@@ -136,9 +125,9 @@ def export_bin(model_id, grid, ft, ary_orig, varname, result_lh=np.asarray([0,0]
 	with open(filename, "wb") as f:
 		f.write(alldata)
 
-def export_bin_wind(model_id, grid, ft, u, v, level):
-	export_bin(model_id, grid, ft, (u**2+v**2)**0.5*1.944, f"wspd{level}")
-	export_bin(model_id, grid, ft, np.arctan2(v, u) / np.pi % 2, f"wdir{level}")
+def export_singlemodel_binary_wind(model_id, grid, ft, u, v, level):
+	export_singlemodel_binary(model_id, grid, ft, (u**2+v**2)**0.5*1.944, f"wspd{level}")       # wind speed in kt
+	export_singlemodel_binary(model_id, grid, ft, np.arctan2(v, u), f"wdir{level}")
 
 def bundle(ft):
 	for i in range(len(varnames)):
@@ -152,57 +141,59 @@ def bundle(ft):
 		with gzip.open(f"bundled_nwp_data/{ft}_{varname}.bin.gz", "wb") as f:
 			f.write(alldata)
 
+
+######## Conversion functions ########
+
 def convert_forecasts(model_id, grbname):
 	grbs_all = pygrib.open(grbname)
 	accprecip_prev = 0
 	for ft in range(6, 241, 6):
 		grbs = grbs_all.select(step=ft)
-		grid, indices = extract_grid(grbs[0])
+		grid, indices = extract_grid_info(grbs[0])
 		
 		t850 = select_var(grbs, indices, shortName=["t"], level=[850])
-		export_bin(model_id, grid, ft, t850, "t850")
+		export_singlemodel_binary(model_id, grid, ft, t850, "t850")
 		
 		z500 = select_var(grbs, indices, shortName=["gh"], level=[500])
-		export_bin(model_id, grid, ft, z500, "z500")
+		export_singlemodel_binary(model_id, grid, ft, z500, "z500")
 		
 		u10 = select_var(grbs, indices, shortName=["10u"])
 		v10 = select_var(grbs, indices, shortName=["10v"])
-		export_bin_wind(model_id, grid, ft, u10, v10, "10")
+		export_singlemodel_binary_wind(model_id, grid, ft, u10, v10, "10")
 		
 		slp = select_var(grbs, indices, shortName=["prmsl","msl","mslet"])
-		export_bin(model_id, grid, ft, slp, "slp", process_lhpos(slp/100, 10))
+		export_singlemodel_binary(model_id, grid, ft, slp, "slp", process_lhpos(slp/100, 10))
 		
 		accprecip = select_var(grbs, indices,
 			parameterName=["Total precipitation","Total precipitation rate"],
 			stepRange=f"0-{ft}")
 		precip6 = accprecip - accprecip_prev
-		export_bin(model_id, grid, ft, accprecip, "accprecip")
-		export_bin(model_id, grid, ft, precip6, "precip6")
+		export_singlemodel_binary(model_id, grid, ft, accprecip, "accprecip")
+		export_singlemodel_binary(model_id, grid, ft, precip6, "precip6")
 		accprecip_prev = accprecip
 
-def convert_era5():
+def convert_era5(model_id):
 	initial_date = datetime(*initial_ymdh)
 	grbs_all = pygrib.open("era5.grib")
-	model_id = 5
 	for ft in range(6,241,6):
 		grbs = grbs_all.select(validDate=initial_date+timedelta(hours=ft))
-		grid, indices = extract_grid(grbs[0])
+		grid, indices = extract_grid_info(grbs[0])
 		
 		t850 = select_var(grbs, indices, shortName=["t"], level=[850])
-		export_bin(model_id, grid, ft, t850, "t850")
+		export_singlemodel_binary(model_id, grid, ft, t850, "t850")
 		
-		z500 = select_var(grbs, indices, shortName=["z"], level=[500])
-		export_bin(model_id, grid, ft, z500/9.81, "z500")
+		z500 = select_var(grbs, indices, shortName=["z"], level=[500]) / 9.81
+		export_singlemodel_binary(model_id, grid, ft, z500, "z500")
 		
 		u10 = select_var(grbs, indices, shortName=["10u"])
 		v10 = select_var(grbs, indices, shortName=["10v"])
-		export_bin_wind(model_id, grid, ft, u10, v10, "10")
+		export_singlemodel_binary_wind(model_id, grid, ft, u10, v10, "10")
 		
 		slp = select_var(grbs, indices, shortName=["prmsl","msl","mslet"])
-		export_bin(model_id, grid, ft, slp, "slp", process_lhpos(slp/100, 10))
+		export_singlemodel_binary(model_id, grid, ft, slp, "slp", process_lhpos(slp/100, 10))
 	
 	grbs_precip = pygrib.open("era5_precip.grib")
-	grid, indices = extract_grid(grbs_precip[1])
+	grid, indices = extract_grid_info(grbs_precip[1])
 	time_offset = round(1 + ((initial_date + timedelta(hours=1)) - (grbs_precip[1].analDate + timedelta(hours=grbs_precip[1].step))) / timedelta(hours=1))
 	accprecip = 0
 	for ft in range(6,241,6):
@@ -210,11 +201,22 @@ def convert_era5():
 		for i in range(ft-6+time_offset, ft+time_offset):
 			precip6 += crop_var(grbs_precip[i].values, indices) * 1000
 		accprecip += precip6
-		export_bin(model_id, grid, ft, accprecip, "accprecip")
-		export_bin(model_id, grid, ft, precip6, "precip6")
+		export_singlemodel_binary(model_id, grid, ft, accprecip, "accprecip")
+		export_singlemodel_binary(model_id, grid, ft, precip6, "precip6")
 
 
-### Main ###
+##### Main #####
+
+initial_ymdh = [2024, 2, 14, 0]
+
+# Variables to process.
+# If you want more, add names here and their normalization formulae to the "normalize" dictionary defined earlier. Then, add codes to process your new variables in the "Conversion functions" defined above.
+varnames = ["slp","t850","precip6","accprecip","z500","wdir10","wspd10"]
+
+lonmin = 0
+lonmax = 359.5
+latmin = -90
+latmax = 90
 
 # Convert each NWP data and reanalysis
 convert_forecasts(0, "us.grb2")
@@ -222,9 +224,9 @@ convert_forecasts(1, "ca.grb2")
 convert_forecasts(2, "ec.grb2")
 convert_forecasts(3, "kr.grb2")
 convert_forecasts(4, "jp.grb2")
-convert_era5()
+convert_era5     (5)
 
-# Bundle intermediate files
+# Bundle single-model files to multimodel ones
 for ft in range(6,241,6):
 	bundle(ft)
 
