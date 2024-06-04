@@ -18,7 +18,7 @@ This project is published under the GPL-3.0 license.
 * Compressed files are hosted on a web server.
 * Requirements:
   * Python3
-  * Python packages to decode your NWP product of interest (ex. pygrib, netCDF4)
+  * Python packages (ex. pygrib, netCDF4) to decode your NWP product of interest
   * A web server (ex. NGINX, Apache) which can serve pre-gzipped files using the "Content-Encoding: gzip" header
 
 ### Client
@@ -27,6 +27,7 @@ This project is published under the GPL-3.0 license.
 * Requirements:
   * WebAssembly
   * WebGL2
+  * Automatic decompression of files with the "Content-Encoding: gzip" header
 
 ## Installation
 
@@ -52,7 +53,7 @@ Run your conversion script. Copy the `bundled_nwp_data` directory and all files 
 
 ### Modify client-side scirpts
 
-Data directory, initial dates, and model names may not be suitable for your IME. Modify them as necessary.
+Data directory, initial dates, and model names may not be suitable for your purpose. Modify them as necessary.
 
 ## Data and softwares used in this project
 
